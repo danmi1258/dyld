@@ -2956,6 +2956,8 @@ static int __attribute__((noinline)) _shared_region_check_np(uint64_t* start_add
 }
 
 
+//_shared_region_map_and_slide_np(fd, mappingCount, mappings, codeSignatureMappingIndex, cacheSlide, slideInfo, slideInfoSize)
+	
 static int __attribute__((noinline)) _shared_region_map_and_slide_np(int fd, uint32_t count, const shared_file_mapping_np mappings[],
 												int codeSignatureMappingIndex, int slide, void* slideInfo, uint32_t slideInfoSize)
 {
@@ -3390,8 +3392,8 @@ static void mapSharedCache()
 								slideInfoSize = header->slideInfoSize;
 								//----------end---------
 								// add VM_PROT_SLIDE bit to __DATA area of cache
-								mappings[readWriteMappingIndex].sfm_max_prot  |= VM_PROT_SLIDE;
-								mappings[readWriteMappingIndex].sfm_init_prot |= VM_PROT_SLIDE;
+								mappings[readWriteMappingIndex].sfm_max_prot  |= VM_PROT_SLIDE;	//_DATA section's protection has VM_PROT_SLIDE bit.
+								mappings[readWriteMappingIndex].sfm_init_prot |= VM_PROT_SLIDE; //_DATA section's protection has VM_PROT_SLIDE bit.
 							}
 						}
 						if (_shared_region_map_and_slide_np(fd, mappingCount, mappings, codeSignatureMappingIndex, cacheSlide, slideInfo, slideInfoSize) == 0) {

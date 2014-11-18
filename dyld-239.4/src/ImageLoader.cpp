@@ -187,6 +187,7 @@ void ImageLoader::setMatchInstallPath(bool match)
 
 bool ImageLoader::statMatch(const struct stat& stat_buf) const
 {
+	//比较设备号和inode
 	return ( (this->fDevice == stat_buf.st_dev) && (this->fInode == stat_buf.st_ino) );	
 }
 
@@ -365,7 +366,8 @@ void ImageLoader::link(const LinkContext& context, bool forceLazysBound, bool pr
 	// we only do the loading step for preflights
 	if ( preflightOnly )
 		return;
-		
+	
+	//mach_absolute_time是一个CPU/总线依赖函数，返回一个基于系统启动后的时钟”嘀嗒”数。
 	uint64_t t1 = mach_absolute_time();
 	context.clearAllDepths();
 	this->recursiveUpdateDepth(context.imageCount());
@@ -1070,7 +1072,7 @@ void ImageLoader::printStatistics(unsigned int imageCount, const InitializerTimi
 //  /path/bar			_debug   =>   /path/bar_debug  
 //  /path/bar.A.dylib   _debug   =>   /path/bar.A_debug.dylib
 //
-void ImageLoader::addSuffix(const char* path, const char* suffix, char* result)
+void ImageLoader::addSuffix(const char* path, const char* suffix, char* result)	//添加debug
 {
 	strcpy(result, path);
 	
@@ -1079,7 +1081,8 @@ void ImageLoader::addSuffix(const char* path, const char* suffix, char* result)
 		start++;
 	else
 		start = result;
-		
+	
+	//先覆盖.以后的东西
 	char* dot = strrchr(start, '.');
 	if ( dot != NULL ) {
 		strcpy(dot, suffix);

@@ -382,6 +382,13 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		CBB091511A19AFC300280CC4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F93937300A94FAF700070A07 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -641,6 +648,7 @@
 				F9ED4C950630A76000DF4E74 /* Sources */,
 				F907E2490FA6469000BFEDBD /* install iPhone file */,
 				F99B8EB60FEC236500701838 /* suppress macosx dyld_shared_cache_util */,
+				CBB091511A19AFC300280CC4 /* Frameworks */,
 			);
 			buildRules = (
 				F921D318070376B0000D1056 /* PBXBuildRule */,

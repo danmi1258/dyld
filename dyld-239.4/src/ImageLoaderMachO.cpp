@@ -842,17 +842,17 @@ void ImageLoaderMachO::registerInterposing()
 							const unsigned int count = sect->size / sizeof(InterposeData);
 							for (uint32_t i=0; i < count; ++i) {
 								ImageLoader::InterposeTuple tuple;
-								tuple.replacement		= interposeArray[i].replacement;
+								tuple.replacement		= interposeArray[i].replacement;/*地址*/
 								tuple.replacementImage	= this;
 								tuple.replacee			= interposeArray[i].replacee;
 								// <rdar://problem/7937695> verify that replacement is in this image
 								if ( this->containsAddress((void*)tuple.replacement) ) {
 									for (std::vector<InterposeTuple>::iterator it=fgInterposingTuples.begin(); it != fgInterposingTuples.end(); it++) {
 										if ( it->replacee == tuple.replacee ) {
-											tuple.replacee = it->replacement;
+											tuple.replacee = it->replacement;	//如果发现相同， 那么重新赋值
 										}
 									}
-									ImageLoader::fgInterposingTuples.push_back(tuple);
+									ImageLoader::fgInterposingTuples.push_back(tuple);	//保存当前拦截的函数
 								}
 							}
 						}

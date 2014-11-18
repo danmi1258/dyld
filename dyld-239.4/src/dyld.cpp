@@ -911,17 +911,18 @@ static void addImage(ImageLoader* image)
 {
 	// add to master list
     allImagesLock();
-        sAllImages.push_back(image);
+        sAllImages.push_back(image);	//保存当前的镜像
     allImagesUnlock();
 	
 	// update mapped ranges
 	uintptr_t lastSegStart = 0;
 	uintptr_t lastSegEnd = 0;
+	
 	for(unsigned int i=0, e=image->segmentCount(); i < e; ++i) { //遍历全部的segment
-		if ( image->segUnaccessible(i) ) 
+		if ( image->segUnaccessible(i) )	//PAGE_ZERO
 			continue;
-		uintptr_t start = image->segActualLoadAddress(i);
-		uintptr_t end = image->segActualEndAddress(i);
+		uintptr_t start = image->segActualLoadAddress(i);	//起始地址
+		uintptr_t end = image->segActualEndAddress(i);		//终止地址
 		if ( start == lastSegEnd ) {
 			// two segments are contiguous, just record combined segments
 			lastSegEnd = end;
@@ -1153,6 +1154,7 @@ static void checkDylibOverride(const char* dylibFile)
 						}
 					}
 				}
+				
 				if ( ! entryExists ) {
 					DylibOverride entry;
 					entry.installName = strdup(sysInstallName);
@@ -1795,6 +1797,8 @@ static void checkSharedRegionDisable()
 #if __MAC_OS_X_VERSION_MIN_REQUIRED
 	// if main executable has segments that overlap the shared region, 
 	// then disable using the shared region
+	//当前segment在做偏移之后， 需要在我们的地址范围内
+	//大小是2G
 	if ( sMainExecutable->overlapsWithAddressRange((void*)(uintptr_t)SHARED_REGION_BASE, (void*)(uintptr_t)(SHARED_REGION_BASE + SHARED_REGION_SIZE)) ) {
 		gLinkContext.sharedRegionMode = ImageLoader::kDontUseSharedRegion;	//do not allow map the shared region
 		if ( gLinkContext.verboseMapping )
@@ -1862,7 +1866,7 @@ void forEachImageDo( void (*callback)(ImageLoader*, void* userData), void* userD
 
 ImageLoader* findLoadedImage(const struct stat& stat_buf)
 {
-	const unsigned int imageCount = sAllImages.size();
+	const unsigned int imageCount = sAllImages.size();	//当前全部的image的大小
 	for(unsigned int i=0; i < imageCount; ++i){
 		ImageLoader* anImage = sAllImages[i];
 		if ( anImage->statMatch(stat_buf) )
@@ -1901,18 +1905,19 @@ static const char* getFrameworkPartialPath(const char* path)
 		const char* dirStart = dirDot;
 		for ( ; dirStart >= path; --dirStart) {
 			if ( (*dirStart == '/') || (dirStart == path) ) {
-				const char* frameworkStart = &dirStart[1];
+				const char* frameworkStart = &dirStart[1];	//当前framework的全名
 				if ( dirStart == path )
-					--frameworkStart;
-				int len = dirDot - frameworkStart;
+					--frameworkStart;	//去掉"/"
+				int len = dirDot - frameworkStart; //当前framwwork的名字
 				char framework[len+1];
 				strncpy(framework, frameworkStart, len);
 				framework[len] = '\0';
 				const char* leaf = strrchr(path, '/');
-				if ( leaf != NULL ) {
+				if ( leaf != NULL ) {	//找到了
 					if ( strcmp(framework, &leaf[1]) == 0 ) {
-						return frameworkStart;
+						return frameworkStart;	//如果确定是
 					}
+					//确实是否是debug framework
 					if (  gLinkContext.imageSuffix != NULL ) {
 						// some debug frameworks have install names that end in _debug
 						if ( strncmp(framework, &leaf[1], len) == 0 ) {
@@ -2203,10 +2208,11 @@ static bool findInSharedCacheImage(const char* path, const struct stat* stat_buf
 		}
 #endif
 		// walk shared cache to see if there is a cached image that matches the inode/mtime/path desired
+		//遍历当前的image以查看当前的文件是否在cache中
 		const dyld_cache_image_info* const start = (dyld_cache_image_info*)((uint8_t*)sSharedCache + sSharedCache->imagesOffset);
 		const dyld_cache_image_info* const end = &start[sSharedCache->imagesCount];
 		for( const dyld_cache_image_info* p = start; p != end; ++p) {
-#if __IPHONE_OS_VERSION_MIN_REQUIRED	
+#if __IPHONE_OS_VERSION_MIN_REQUIRED	//for IOS
 			// just check path
 			const char* aPath = (char*)sSharedCache + p->pathFileOffset;
 			if ( strcmp(path, aPath) == 0 ) {
@@ -2218,12 +2224,13 @@ static bool findInSharedCacheImage(const char* path, const struct stat* stat_buf
 			}
 #elif __MAC_OS_X_VERSION_MIN_REQUIRED
 			// check mtime and inode first because it is fast
+			//st_mtime==>对应的修改时间，单位是秒
 			if ( sSharedCacheIgnoreInodeAndTimeStamp 
 				|| ( ((time_t)p->modTime == stat_buf->st_mtime) && ((ino_t)p->inode == stat_buf->st_ino) ) ) {
 				// mod-time and inode match an image in the shared cache, now check path
 				const char* aPath = (char*)sSharedCache + p->pathFileOffset;
-				bool cacheHit = (strcmp(path, aPath) == 0);
-				if ( ! cacheHit ) {
+				bool cacheHit = (strcmp(path, aPath) == 0);	//判断一下是否命中了缓存
+				if ( ! cacheHit ) {	//如果没有命中， 那么我们就比较设备号和vnode节点号
 					// path does not match install name of dylib in cache, but inode and mtime does match
 					// perhaps path is a symlink to the cached dylib
 					struct stat pathInCacheStatBuf;
@@ -2267,7 +2274,7 @@ static ImageLoader* checkandAddImage(ImageLoader* image, const LoadContext& cont
 			if ( installPath != NULL) {
 				if ( strcmp(loadedImageInstallPath, installPath) == 0 ) {
 					//dyld::log("duplicate(%s) => %p\n", installPath, anImage);
-					removeImage(image);
+					removeImage(image);					//删除image
 					ImageLoader::deleteImage(image);
 					return anImage;
 				}
@@ -2275,6 +2282,7 @@ static ImageLoader* checkandAddImage(ImageLoader* image, const LoadContext& cont
 		}
 	}
 
+	//根据具体的API进行不同的判断
 	// some API's restrict what they can load
 	if ( context.mustBeBundle && !image->isBundle() )
 		throw "not a bundle";
@@ -2409,7 +2417,7 @@ static ImageLoader* loadPhase5load(const char* path, const char* orgPath, const 
 
 	// just return NULL if file not found, but record any other errors
 	struct stat stat_buf;
-	if ( my_stat(path, &stat_buf) == -1 ) {
+	if ( my_stat(path, &stat_buf) == -1 ) {	//查看当前的路径下的文件是否存在
 		int err = errno;
 		if ( err != ENOENT ) {
 			exceptions->push_back(dyld::mkstringf("%s: stat() failed with errno=%d", path, err));
@@ -2431,8 +2439,9 @@ static ImageLoader* loadPhase5load(const char* path, const char* orgPath, const 
 	const macho_header* mhInCache;
 	const char*			pathInCache;
 	long				slideInCache;
-	if ( findInSharedCacheImage(path, &stat_buf, &mhInCache, &pathInCache, &slideInCache) ) {
-		image = ImageLoaderMachO::instantiateFromCache(mhInCache, pathInCache, slideInCache, stat_buf, gLinkContext);
+	//查看当前这个imge是否在dyld的cache中
+	if ( findInSharedCacheImage(path, &stat_buf, &mhInCache, &pathInCache, &slideInCache) ) {//如果存在， 那么进入当前的循环
+		image = ImageLoaderMachO::instantiateFromCache(mhInCache, pathInCache, slideInCache, stat_buf, gLinkContext);	//生成当前的image
 		return checkandAddImage(image, context);
 	}
 #endif
@@ -2533,9 +2542,24 @@ static ImageLoader* loadPhase5load(const char* path, const char* orgPath, const 
 // look for path match with existing loaded images
 static ImageLoader* loadPhase5check(const char* path, const char* orgPath, const LoadContext& context)
 {
+	/*
+		LoadContext context;
+		context.useSearchPaths		= false;
+		context.useFallbackPaths	= false;
+		context.useLdLibraryPath	= false;
+		context.implicitRPath		= false;
+		context.matchByInstallName	= false;
+		context.dontLoad			= false;
+		context.mustBeBundle		= false;
+		context.mustBeDylib			= true;
+		context.canBePIE			= false;
+		context.origin				= NULL;	// can't use @loader_path with DYLD_INSERT_LIBRARIES
+		context.rpath				= NULL;
+	 */
+
 	//dyld::log("%s(%s, %s)\n", __func__ , path, orgPath);
 	// search path against load-path and install-path of all already loaded images
-	uint32_t hash = ImageLoader::hash(path);
+	uint32_t hash = ImageLoader::hash(path);	//hash当前的路径
 	//dyld::log("check() hash=%d, path=%s\n", hash, path);
 	for (std::vector<ImageLoader*>::iterator it=sAllImages.begin(); it != sAllImages.end(); it++) {
 		ImageLoader* anImage = *it;
@@ -2548,6 +2572,7 @@ static ImageLoader* loadPhase5check(const char* path, const char* orgPath, const
 					return anImage;
 			}
 		}
+		//必须match当前的安装路径
 		if ( context.matchByInstallName || anImage->matchInstallPath() ) {
 			const char* installPath = anImage->getInstallPath();
 			if ( installPath != NULL) {
@@ -2583,7 +2608,7 @@ static ImageLoader* loadPhase5(const char* path, const char* orgPath, const Load
 	// check for specific dylib overrides
 	for (std::vector<DylibOverride>::iterator it = sDylibOverrides.begin(); it != sDylibOverrides.end(); ++it) {
 		if ( strcmp(it->installName, path) == 0 ) {
-			path = it->override;
+			path = it->override;	//覆盖当前的dyld
 			break;
 		}
 	}
@@ -2595,13 +2620,15 @@ static ImageLoader* loadPhase5(const char* path, const char* orgPath, const Load
 }
 
 // try with and without image suffix
+//注意：这个函数的第一个参数是绝对路径， 第二个是带有@executable_path/的路径
+//追加后缀
 static ImageLoader* loadPhase4(const char* path, const char* orgPath, const LoadContext& context, std::vector<const char*>* exceptions)
 {
 	//dyld::log("%s(%s, %p)\n", __func__ , path, exceptions);
 	ImageLoader* image = NULL;
 	if (  gLinkContext.imageSuffix != NULL ) {
 		char pathWithSuffix[strlen(path)+strlen( gLinkContext.imageSuffix)+2];
-		ImageLoader::addSuffix(path,  gLinkContext.imageSuffix, pathWithSuffix);
+		ImageLoader::addSuffix(path,  gLinkContext.imageSuffix, pathWithSuffix);	//添加_debug或者其他的后缀
 		image = loadPhase5(pathWithSuffix, orgPath, context, exceptions);
 	}
 	if ( image == NULL )
@@ -2614,7 +2641,7 @@ static ImageLoader* loadPhase2(const char* path, const char* orgPath, const Load
 							   std::vector<const char*>* exceptions); // forward reference
 
 
-// expand @ variables
+// expand @ variables（扩展@变量）
 static ImageLoader* loadPhase3(const char* path, const char* orgPath, const LoadContext& context, std::vector<const char*>* exceptions)
 {
 	//dyld::log("%s(%s, %p)\n", __func__ , path, exceptions);
@@ -2624,29 +2651,31 @@ static ImageLoader* loadPhase3(const char* path, const char* orgPath, const Load
 		if ( sProcessIsRestricted ) 
 			throwf("unsafe use of @executable_path in %s with restricted binary", context.origin);
 		// handle @executable_path path prefix
-		const char* executablePath = sExecPath;
-		char newPath[strlen(executablePath) + strlen(path)];
+		const char* executablePath = sExecPath;	//当前程序的执行路径
+		char newPath[strlen(executablePath) + strlen(path)];	//生成新的路径
 		strcpy(newPath, executablePath);
-		char* addPoint = strrchr(newPath,'/');
+		char* addPoint = strrchr(newPath,'/');	//找到最后一个反斜杠
 		if ( addPoint != NULL )
-			strcpy(&addPoint[1], &path[17]);
+			strcpy(&addPoint[1], &path[17]);	//追加@executable_path/后面的相对的路径
 		else
-			strcpy(newPath, &path[17]);
+			strcpy(newPath, &path[17]);	//如果没有就直接追加
+		//注意：这个函数的第一个参数是绝对路径， 第二个是带有@executable_path/的路径
 		image = loadPhase4(newPath, orgPath, context, exceptions);
 		if ( image != NULL ) 
 			return image;
 
+		//一下是对sy
 		// perhaps main executable path is a sym link, find realpath and retry
 		char resolvedPath[PATH_MAX];
-		if ( realpath(sExecPath, resolvedPath) != NULL ) {
+		if ( realpath(sExecPath, resolvedPath) != NULL ) {	//得到当前的真实路径
 			char newRealPath[strlen(resolvedPath) + strlen(path)];
 			strcpy(newRealPath, resolvedPath);
 			char* addPoint = strrchr(newRealPath,'/');
 			if ( addPoint != NULL )
-				strcpy(&addPoint[1], &path[17]);
+				strcpy(&addPoint[1], &path[17]);	//当前全路径
 			else
 				strcpy(newRealPath, &path[17]);
-			image = loadPhase4(newRealPath, orgPath, context, exceptions);
+			image = loadPhase4(newRealPath, orgPath, context, exceptions);	//这次使用全路径去加载image
 			if ( image != NULL ) 
 				return image;
 		}
@@ -2732,7 +2761,7 @@ static ImageLoader* loadPhase2(const char* path, const char* orgPath, const Load
 {
 	//dyld::log("%s(%s, %p)\n", __func__ , path, exceptions);
 	ImageLoader* image = NULL;
-	const char* frameworkPartialPath = getFrameworkPartialPath(path);
+	const char* frameworkPartialPath = getFrameworkPartialPath(path);	//framework的名称
 	if ( frameworkPaths != NULL ) {
 		if ( frameworkPartialPath != NULL ) {
 			const int frameworkPartialPathLen = strlen(frameworkPartialPath);
@@ -2751,7 +2780,7 @@ static ImageLoader* loadPhase2(const char* path, const char* orgPath, const Load
 	// <rdar://problem/12649639> An executable with the same name as a framework & DYLD_LIBRARY_PATH pointing to it gets loaded twice
 	// <rdar://problem/14160846> Some apps depend on frameworks being found via library paths
 	if ( (libraryPaths != NULL) && ((frameworkPartialPath == NULL) || sFrameworksFoundAsDylibs) ) {
-		const char* libraryLeafName = getLibraryLeafName(path);
+		const char* libraryLeafName = getLibraryLeafName(path);	//得到最后一个文件名字
 		const int libraryLeafNameLen = strlen(libraryLeafName);
 		for(const char* const* lp = libraryPaths; *lp != NULL; ++lp) {
 			char libpath[strlen(*lp)+libraryLeafNameLen+8];
@@ -2767,20 +2796,35 @@ static ImageLoader* loadPhase2(const char* path, const char* orgPath, const Load
 	return NULL;
 }
 
-// try search overrides and fallbacks
+// try search overrides and fallbacks(设法去搜素覆盖和可依靠的东西)
 static ImageLoader* loadPhase1(const char* path, const char* orgPath, const LoadContext& context, std::vector<const char*>* exceptions)
 {
 	//dyld::log("%s(%s, %p)\n", __func__ , path, exceptions);
 	ImageLoader* image = NULL;
 
+	 /*
+		LoadContext context;
+		context.useSearchPaths		= false;
+		context.useFallbackPaths	= false;
+		context.useLdLibraryPath	= false;
+		context.implicitRPath		= false;
+		context.matchByInstallName	= false;
+		context.dontLoad			= false;
+		context.mustBeBundle		= false;
+		context.mustBeDylib			= true;
+		context.canBePIE			= false;
+		context.origin				= NULL;	// can't use @loader_path with DYLD_INSERT_LIBRARIES
+		context.rpath				= NULL;
+	 */
 	// handle LD_LIBRARY_PATH environment variables that force searching
-	if ( context.useLdLibraryPath && (sEnv.LD_LIBRARY_PATH != NULL) ) {
+	//LD_LIBRARY_PATH==>ld首先在这条路径下搜索
+	if ( context.useLdLibraryPath && (sEnv.LD_LIBRARY_PATH != NULL) ) {	//不进入当前的分支
 		image = loadPhase2(path, orgPath, context, NULL, sEnv.LD_LIBRARY_PATH, exceptions);
 		if ( image != NULL )
 			return image;
 	}
 
-	// handle DYLD_ environment variables that force searching
+	// handle DYLD_ environment variables that force searching	//不进入当前的分支
 	if ( context.useSearchPaths && ((sEnv.DYLD_FRAMEWORK_PATH != NULL) || (sEnv.DYLD_LIBRARY_PATH != NULL)) ) {
 		image = loadPhase2(path, orgPath, context, sEnv.DYLD_FRAMEWORK_PATH, sEnv.DYLD_LIBRARY_PATH, exceptions);
 		if ( image != NULL )
@@ -2805,17 +2849,18 @@ static ImageLoader* loadPhase1(const char* path, const char* orgPath, const Load
 	return NULL;
 }
 
+//根目录替换
 // try root substitutions
 static ImageLoader* loadPhase0(const char* path, const char* orgPath, const LoadContext& context, std::vector<const char*>* exceptions)
 {
 	//dyld::log("%s(%s, %p)\n", __func__ , path, exceptions);
 
 	// handle DYLD_ROOT_PATH which forces absolute paths to use a new root
-	if ( (gLinkContext.rootPaths != NULL) && (path[0] == '/') ) {
+	if ( (gLinkContext.rootPaths != NULL) && (path[0] == '/') ) {	//根目录, 一般来说是SDK的根目录地址
 		for(const char* const* rootPath = gLinkContext.rootPaths ; *rootPath != NULL; ++rootPath) {
 			char newPath[strlen(*rootPath) + strlen(path)+2];
 			strcpy(newPath, *rootPath);
-			strcat(newPath, path);
+			strcat(newPath, path);	//将当前的path接到环境变量中, 因此第一步其实就是拼接目录地址
 			ImageLoader* image = loadPhase1(newPath, orgPath, context, exceptions);
 			if ( image != NULL )
 				return image;
@@ -2842,17 +2887,33 @@ static ImageLoader* loadPhase0(const char* path, const char* orgPath, const Load
 //
 ImageLoader* load(const char* path, const LoadContext& context)
 {
+	/*
+		LoadContext context;
+		context.useSearchPaths		= false;
+		context.useFallbackPaths	= false;
+		context.useLdLibraryPath	= false;
+		context.implicitRPath		= false;
+		context.matchByInstallName	= false;
+		context.dontLoad			= false;
+		context.mustBeBundle		= false;
+		context.mustBeDylib			= true;
+		context.canBePIE			= false;
+		context.origin				= NULL;	// can't use @loader_path with DYLD_INSERT_LIBRARIES
+		context.rpath				= NULL;
+	 */
 	CRSetCrashLogMessage2(path);
 	const char* orgPath = path;
 	
 	//dyld::log("%s(%s)\n", __func__ , path);
 	char realPath[PATH_MAX];
 	// when DYLD_IMAGE_SUFFIX is in used, do a realpath(), otherwise a load of "Foo.framework/Foo" will not match
+	//当前useSearchPath是false， 不会进入当前的分支， 忽略之
 	if ( context.useSearchPaths && ( gLinkContext.imageSuffix != NULL) ) {
 		if ( realpath(path, realPath) != NULL )
 			path = realPath;
 	}
 	
+	// permutations==>排序
 	// try all path permutations and check against existing loaded images
 	ImageLoader* image = loadPhase0(path, orgPath, context, NULL);
 	if ( image != NULL ) {
@@ -2977,11 +3038,22 @@ static int __attribute__((noinline)) _shared_region_map_and_slide_np(int fd, uin
 
 	//使用共享内存
 	if ( gLinkContext.sharedRegionMode == ImageLoader::kUseSharedRegion ) {
+		/*
+		 * shared_region_map_np()
+		 *
+		 * This system call is intended for dyld.
+		 *
+		 * dyld uses this to map a shared cache file into a shared region.
+		 * This is usually done only the first time a shared cache is needed.
+		 * Subsequent processes will just use the populated shared region without
+		 * requiring any further setup.
+		 */
 		return syscall(438, fd, count, mappings, slide, slideInfo, slideInfoSize);
 	}
 
 	// remove the shared region sub-map
-	vm_deallocate(mach_task_self(), (vm_address_t)SHARED_REGION_BASE, SHARED_REGION_SIZE);
+	//size == 2G
+	vm_deallocate(mach_task_self(), (vm_address_t)SHARED_REGION_BASE, SHARED_REGION_SIZE);	//释放当前的内存
 	
 	// notify gdb or other lurkers that this process is no longer using the shared region
 	dyld::gProcessInfo->processDetachedFromSharedRegion = true;
@@ -2989,7 +3061,8 @@ static int __attribute__((noinline)) _shared_region_map_and_slide_np(int fd, uin
 	// map cache just for this process with mmap()
 	const shared_file_mapping_np* const start = mappings;
 	const shared_file_mapping_np* const end = &mappings[count];
-	for (const shared_file_mapping_np* p = start; p < end; ++p ) {
+	for (const shared_file_mapping_np* p = start; p < end; ++p )
+	{
 		void* mmapAddress = (void*)(uintptr_t)(p->sfm_address);
 		size_t size = p->sfm_size;
 		//dyld::log("dyld: mapping address %p with size 0x%08lX\n", mmapAddress, size);
@@ -3019,11 +3092,15 @@ static int __attribute__((noinline)) _shared_region_map_and_slide_np(int fd, uin
 	}
 
 	// update all __DATA pages with slide info
+	//这里是真的没有看懂， 囧了
 	if ( slide != 0 ) {
-		const uintptr_t dataPagesStart = mappings[1].sfm_address;
+		//mapping的前三个segmnet的权限分别是EX, RW, RO.
+		//因此当前的__::_DATA对应的权限是RW
+		const uintptr_t dataPagesStart = mappings[1].sfm_address;	//RW's start address
 		const dyld_cache_slide_info* slideInfoHeader = (dyld_cache_slide_info*)slideInfo;
 		const uint16_t* toc = (uint16_t*)((long)(slideInfoHeader) + slideInfoHeader->toc_offset);
 		const uint8_t* entries = (uint8_t*)((long)(slideInfoHeader) + slideInfoHeader->entries_offset);
+		
 		for(uint32_t i=0; i < slideInfoHeader->toc_count; ++i) {
 			const uint8_t* entry = &entries[toc[i]*slideInfoHeader->entries_size];
 			const uint8_t* page = (uint8_t*)(long)(dataPagesStart + (4096*i));
@@ -3151,7 +3228,7 @@ static void mapSharedCache()
 {
 	uint64_t cacheBaseAddress = 0;
 	// quick check if a cache is alreay mapped into shared region
-	if ( _shared_region_check_np(&cacheBaseAddress) == 0 )	//查看是内存是否已经映射好了， 这里有一个系统的调用
+	if ( _shared_region_check_np(&cacheBaseAddress) == 0 )	//查看是内存是否已经映射好了， 这里有一个系统的调用， 返回的是当前的第一个
 	{
 		//get the cache file's header
 		/*
@@ -3234,18 +3311,20 @@ static void mapSharedCache()
 		uint32_t	safeBootValue = 0;
 		size_t		safeBootValueSize = sizeof(safeBootValue);
 		//将系统的变量kern.safeboot这个数值读取出来。并且保存在safeBootValue这个变量中
+		//读出当前的系统变量
+		//判断当前是不是安全模式
 		if ( (sysctlbyname("kern.safeboot", &safeBootValue, &safeBootValueSize, NULL, 0) == 0) && (safeBootValue != 0) ) {
 			// user booted machine in safe-boot mode
 			struct stat dyldCacheStatInfo;
 			//  Don't use custom DYLD_SHARED_CACHE_DIR if provided, use standard path
-			if ( my_stat(MACOSX_DYLD_SHARED_CACHE_DIR DYLD_SHARED_CACHE_BASE_NAME ARCH_NAME, &dyldCacheStatInfo) == 0 ) {
+			if ( my_stat(MACOSX_DYLD_SHARED_CACHE_DIR DYLD_SHARED_CACHE_BASE_NAME ARCH_NAME, &dyldCacheStatInfo) == 0 ) {	//读出当前cache
 				struct timeval bootTimeValue;
 				size_t bootTimeValueSize = sizeof(bootTimeValue);
 				if ( (sysctlbyname("kern.boottime", &bootTimeValue, &bootTimeValueSize, NULL, 0) == 0) && (bootTimeValue.tv_sec != 0) ) {
 					// if the cache file was created before this boot, then throw it away and let it rebuild itself
 					if ( dyldCacheStatInfo.st_mtime < bootTimeValue.tv_sec ) {
 						::unlink(MACOSX_DYLD_SHARED_CACHE_DIR DYLD_SHARED_CACHE_BASE_NAME ARCH_NAME);
-						gLinkContext.sharedRegionMode = ImageLoader::kDontUseSharedRegion;
+						gLinkContext.sharedRegionMode = ImageLoader::kDontUseSharedRegion;	//不适用当前的cache文件
 						return;
 					}
 				}
@@ -3257,13 +3336,14 @@ static void mapSharedCache()
 		int fd = openSharedCacheFile(); //open the cache file, and return the file descriptor
 		if ( fd != -1 ) {
 			//8192是两个页面的大小
-			uint8_t firstPages[8192];
+			uint8_t firstPages[8192];	//读取两个页面
 			if ( ::read(fd, firstPages, 8192) == 8192 )
 			{
 				dyld_cache_header* header = (dyld_cache_header*)firstPages;
 				if ( strcmp(header->magic, ARCH_CACHE_MAGIC) == 0 ) {	//检查magic number
 					
 					//dyld_cache_mapping_info==>这个对应的应该是一些基本的段信息。
+					//段信息
 					const dyld_cache_mapping_info* const fileMappingsStart = (dyld_cache_mapping_info*)&firstPages[header->mappingOffset];
 					const dyld_cache_mapping_info* const fileMappingsEnd = &fileMappingsStart[header->mappingCount];
 					
@@ -3295,7 +3375,7 @@ static void mapSharedCache()
 					bool goodCache = false;	//验证当前的文件是否还存在
 					struct stat stat_buf;
 					//验证当前文件是否存在
-					if ( fstat(fd, &stat_buf) == 0 ) {
+					if ( fstat(fd, &stat_buf) == 0 ) {	//判断当前的cache文件
 						goodCache = true;	//设置标志位
 						int i=0;
 						//将需要映射的区域赋值给mappings
@@ -3386,9 +3466,14 @@ static void mapSharedCache()
 								cacheSlide = 0;
 							else {
 								// generate random slide amount
-								cacheSlide = pickCacheSlide(mappingCount, mappings);	//对mappings做aslr
+								cacheSlide = pickCacheSlide(mappingCount, mappings);	//对mappings做aslr, 貌似还是蛮复杂的， 如果是有X86_64这个宏， 直接是对段进行slider
 								//没看懂-----start-------
-								slideInfo = (void*)(long)(mappings[readOnlyMappingIndex].sfm_address + (header->slideInfoOffset - mappings[readOnlyMappingIndex].sfm_file_offset));
+								//我猜是sliderInfo是在RO这个段上
+								/*
+								 var a = mappings[readOnlyMappingIndex].sfm_address - mappings[readOnlyMappingIndex].sfm_file_offset) ==>拿到header的起始位置
+								 a += header->slideInfoOffset  ==> 拿到slide的起始位置
+								 */
+								slideInfo = (void*)(long)(mappings[readOnlyMappingIndex].sfm_address + (header->slideInfoOffset - mappings[readOnlyMappingIndex].sfm_file_offset));	//得到slideInfoOffset地址
 								slideInfoSize = header->slideInfoSize;
 								//----------end---------
 								// add VM_PROT_SLIDE bit to __DATA area of cache
@@ -3396,6 +3481,8 @@ static void mapSharedCache()
 								mappings[readWriteMappingIndex].sfm_init_prot |= VM_PROT_SLIDE; //_DATA section's protection has VM_PROT_SLIDE bit.
 							}
 						}
+						//对页面进行映射， 主要针对的是mapping
+						//页面映射
 						if (_shared_region_map_and_slide_np(fd, mappingCount, mappings, codeSignatureMappingIndex, cacheSlide, slideInfo, slideInfoSize) == 0) {
 							// successfully mapped cache into shared region
 							sSharedCache = (dyld_cache_header*)mappings[0].sfm_address;
@@ -3403,8 +3490,8 @@ static void mapSharedCache()
 							dyld::gProcessInfo->sharedCacheSlide = cacheSlide;
 							//dyld::log("sSharedCache=%p sSharedCacheSlide=0x%08lX\n", sSharedCache, sSharedCacheSlide);
 							// if cache has a uuid, copy it
-							if ( header->mappingOffset >= 0x68 ) {
-								memcpy(dyld::gProcessInfo->sharedCacheUUID, header->uuid, 16);
+							if ( header->mappingOffset >= 0x68 ) {	//存在uuid
+								memcpy(dyld::gProcessInfo->sharedCacheUUID, header->uuid, 16);	//copy uuid
 							}
 						}
 						else {
@@ -3912,12 +3999,12 @@ static void setContext(const macho_header* mainExecutableMH, int argc, const cha
 	gLinkContext.findImageContainingAddress	= &findImageContainingAddress;
 	gLinkContext.addDynamicReference	= &addDynamicReference;
 	gLinkContext.bindingOptions			= ImageLoader::kBindingNone;
-	gLinkContext.argc					= argc;
-	gLinkContext.argv					= argv;
-	gLinkContext.envp					= envp;
-	gLinkContext.apple					= apple;
-	gLinkContext.progname				= (argv[0] != NULL) ? basename(argv[0]) : "";
-	gLinkContext.programVars.mh			= mainExecutableMH;
+	gLinkContext.argc					= argc;	//参数
+	gLinkContext.argv					= argv; //参数个数
+	gLinkContext.envp					= envp; //环境变量
+	gLinkContext.apple					= apple;	//苹果自己的参数
+	gLinkContext.progname				= (argv[0] != NULL) ? basename(argv[0]) : "";	//可执行文件的文件名
+	gLinkContext.programVars.mh			= mainExecutableMH;	//当前可执行文件的文件格式
 	gLinkContext.programVars.NXArgcPtr	= &gLinkContext.argc;
 	gLinkContext.programVars.NXArgvPtr	= &gLinkContext.argv;
 	gLinkContext.programVars.environPtr	= &gLinkContext.envp;
@@ -4232,6 +4319,7 @@ static bool processRestricted(const macho_header* mainExecutableMH)
 {	
 #if __MAC_OS_X_VERSION_MIN_REQUIRED
     // ask kernel if code signature of program makes it restricted
+	//是否要强制检查代码签名
     uint32_t flags;
 	if ( csops(0, CS_OPS_STATUS, &flags, sizeof(flags)) != -1 ) {
 		if ( flags & CS_ENFORCEMENT ) {
@@ -4243,17 +4331,17 @@ static bool processRestricted(const macho_header* mainExecutableMH)
 		return true;
 	}
 #else
-	gLinkContext.codeSigningEnforced = true;
+	gLinkContext.codeSigningEnforced = true;	//IOS
 #endif
 	
 	// all processes with setuid or setgid bit set are restricted
-    if ( issetugid() ) {
+    if ( issetugid() ) {	//没看懂
 		sRestrictedReason = restrictedBySetGUid;
 		return true;
 	}
 		
 	// <rdar://problem/13158444&13245742> Respect __RESTRICT,__restrict section for root processes
-	if ( hasRestrictedSegment(mainExecutableMH) ) {
+	if ( hasRestrictedSegment(mainExecutableMH) ) {	//查看当前是否有_RESTRICT这个segment
 		// existence of __RESTRICT/__restrict section make process restricted
 		sRestrictedReason = restrictedBySegment;
 		return true;
@@ -4464,7 +4552,7 @@ _main(const macho_header* mainExecutableMH, uintptr_t mainExecutableSlide,
 		uintptr_t* startGlue)
 {
 	uintptr_t result = 0;
-	sMainExecutableMachHeader = mainExecutableMH;
+	sMainExecutableMachHeader /*可执行文件*/ = mainExecutableMH;
 #if __MAC_OS_X_VERSION_MIN_REQUIRED
 	// if this is host dyld, check to see if iOS simulator is being run
 	const char* rootPath = _simple_getenv(envp, "DYLD_ROOT_PATH");
@@ -4511,34 +4599,35 @@ _main(const macho_header* mainExecutableMH, uintptr_t mainExecutableSlide,
 	}
 	//dyld::log("open(%s) => %d, errno = %d\n", bindingsLogPath, sBindingsLogfile, errno);
 #endif	
-	setContext(mainExecutableMH, argc, argv, envp, apple);
+	setContext(mainExecutableMH, argc, argv, envp, apple);	//设置一些基本的变量信息
 
 	// Pickup the pointer to the exec path.
-	sExecPath = _simple_getenv(apple, "executable_path");
+	sExecPath = _simple_getenv(apple, "executable_path");	//这行代码没什么用
 
 	// <rdar://problem/13868260> Remove interim apple[0] transition code from dyld
 	if (!sExecPath) sExecPath = apple[0];
 	
-	sExecPath = apple[0];
-	bool ignoreEnvironmentVariables = false;
-	if ( sExecPath[0] != '/' ) {
+	sExecPath = apple[0];	//设置当前可执行文件文件名
+	bool ignoreEnvironmentVariables = false;	//是否忽略环境变量
+	if ( sExecPath[0] != '/' ) {	//不是绝对路径
 		// have relative path, use cwd to make absolute
 		char cwdbuff[MAXPATHLEN];
-	    if ( getcwd(cwdbuff, MAXPATHLEN) != NULL ) {
+	    if ( getcwd(cwdbuff, MAXPATHLEN) != NULL ) {	//获得当前工作目录
 			// maybe use static buffer to avoid calling malloc so early...
 			char* s = new char[strlen(cwdbuff) + strlen(sExecPath) + 2];
 			strcpy(s, cwdbuff);
 			strcat(s, "/");
 			strcat(s, sExecPath);
-			sExecPath = s;
+			sExecPath = s;	//获得当前的可执行文件的绝对路径
 		}
 	}
 	// Remember short name of process for later logging
-	sExecShortName = ::strrchr(sExecPath, '/');
+	sExecShortName = ::strrchr(sExecPath, '/');	//文件名
 	if ( sExecShortName != NULL )
 		++sExecShortName;
 	else
 		sExecShortName = sExecPath;
+	
     sProcessIsRestricted = processRestricted(mainExecutableMH);
     if ( sProcessIsRestricted ) {
 #if SUPPORT_LC_DYLD_ENVIRONMENT
@@ -4595,19 +4684,23 @@ _main(const macho_header* mainExecutableMH, uintptr_t mainExecutableSlide,
 		checkSharedRegionDisable();	//如果有重合的 那么就取消映射
 	#if DYLD_SHARED_CACHE_SUPPORT
 		if ( gLinkContext.sharedRegionMode != ImageLoader::kDontUseSharedRegion )
-			mapSharedCache();
+			mapSharedCache();	//map the cache文件， 函数很复杂
 	#endif
+		
+		//Hook住API， 这个部分实现了dyld的函数拦截功能。
+		//这个功能今晚查看(2014/11/13)
 		// load any inserted libraries
 		if	( sEnv.DYLD_INSERT_LIBRARIES != NULL ) {
 			for (const char* const* lib = sEnv.DYLD_INSERT_LIBRARIES; *lib != NULL; ++lib) 
 				loadInsertedDylib(*lib);
 		}
+		
 		// record count of inserted libraries so that a flat search will look at 
 		// inserted libraries, then main, then others.
 		sInsertedDylibCount = sAllImages.size()-1;
 
 		// link main executable
-		gLinkContext.linkingMainExecutable = true;
+		gLinkContext.linkingMainExecutable = true;	//链接当前的可执行文件
 		link(sMainExecutable, sEnv.DYLD_BIND_AT_LAUNCH, true, ImageLoader::RPathChain(NULL, NULL));
 		sMainExecutable->setNeverUnloadRecursive();
 		if ( sMainExecutable->forceFlat() ) {

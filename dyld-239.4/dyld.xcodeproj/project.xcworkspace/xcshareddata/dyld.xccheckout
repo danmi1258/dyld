@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>IDESourceControlProjectFavoriteDictionaryKey</key>
+	<false/>
+	<key>IDESourceControlProjectIdentifier</key>
+	<string>A4098204-8FEF-403B-A694-838D087AD50C</string>
+	<key>IDESourceControlProjectName</key>
+	<string>dyld</string>
+	<key>IDESourceControlProjectOriginsDictionary</key>
+	<dict>
+		<key>FFA37D090E94BD5C4EB8197D3EB49BB8DD1E5A2E</key>
+		<string>https://github.com/dongAxis/dyld.git</string>
+	</dict>
+	<key>IDESourceControlProjectPath</key>
+	<string>dyld-239.4/dyld.xcodeproj</string>
+	<key>IDESourceControlProjectRelativeInstallPathDictionary</key>
+	<dict>
+		<key>FFA37D090E94BD5C4EB8197D3EB49BB8DD1E5A2E</key>
+		<string>../../..</string>
+	</dict>
+	<key>IDESourceControlProjectURL</key>
+	<string>https://github.com/dongAxis/dyld.git</string>
+	<key>IDESourceControlProjectVersion</key>
+	<integer>111</integer>
+	<key>IDESourceControlProjectWCCIdentifier</key>
+	<string>FFA37D090E94BD5C4EB8197D3EB49BB8DD1E5A2E</string>
+	<key>IDESourceControlProjectWCConfigurations</key>
+	<array>
+		<dict>
+			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
+			<string>public.vcs.git</string>
+			<key>IDESourceControlWCCIdentifierKey</key>
+			<string>FFA37D090E94BD5C4EB8197D3EB49BB8DD1E5A2E</string>
+			<key>IDESourceControlWCCName</key>
+			<string>dyld</string>
+		</dict>
+	</array>
+</dict>
+</plist>

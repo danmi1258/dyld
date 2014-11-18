@@ -70,7 +70,7 @@ struct dyld_cache_slide_info
 	uint32_t	toc_count;
 	uint32_t	entries_offset;
 	uint32_t	entries_count;
-	uint32_t	entries_size;  // currently 128 
+	uint32_t	entries_size;  // currently 128
 	// uint16_t toc[toc_count];
 	// entrybitmap entries[entries_count];
 };
